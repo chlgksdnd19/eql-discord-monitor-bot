@@ -35,11 +35,24 @@ if (config.runMode === 'reset-baseline') {
 try {
   const result = await scrapeEql(config, state, paths.debug);
   if (config.runMode === 'inspect-api') {
-    console.log(`API 점검 완료: JSON 응답 ${result.apiCount}개, 상품 ${result.products.length}개 추출`);
-    process.exit(0);
+    const failed = result.failedBrands || [];
+    console.log(`API 점검 완료: JSON/진단 항목 ${result.apiCount}개, 상품 ${result.products.length}개 추출, 실패 브랜드 ${failed.length}개`);
+    if (failed.length) {
+      console.error(`수집 실패 브랜드: ${failed.map((item) => `${item.brand} (${item.message})`).join(', ')}`);
+      process.exitCode = 1;
+    }
+    process.exit();
   }
 
+  const failedBrands = result.failedBrands || [];
   const detectedAt = result.collectedAt || nowIso();
+
+  if (!state.initialized && failedBrands.length) {
+    throw new Error(`기준값 저장을 중단했습니다. 수집 실패 브랜드: ${failedBrands.map((item) => item.brand).join(', ')}`);
+  }
+  if (failedBrands.length) {
+    console.warn(`이번 실행에서 건너뛴 브랜드: ${failedBrands.map((item) => item.brand).join(', ')}. 기존 저장값은 유지합니다.`);
+  }
   const currentMap = new Map(result.products.map((product) => [product.id, product]));
 
   if (!state.initialized) {

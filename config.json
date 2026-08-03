@@ -38,14 +38,17 @@
     }
   ],
   "maxPagesPerBrand": 1,
-  "maxProductsPerBrand": 1200,
+  "maxProductsPerBrand": 250,
   "pageWaitMs": 2500,
-  "requestDelayMs": 500,
-  "detailChecksPerRun": 24,
+  "requestDelayMs": 1200,
+  "detailChecksPerRun": 8,
   "detailProductUrls": [],
   "notifyOnBaseline": false,
   "notifyOnErrors": false,
   "errorAlertAfterFailures": 3,
   "timezone": "Asia/Seoul",
-  "loadMoreClicksPerBrand": 18
+  "loadMoreClicksPerBrand": 12,
+  "brandDelayMs": 4000,
+  "brandRetryCount": 2,
+  "brandRetryDelayMs": 10000
 }
