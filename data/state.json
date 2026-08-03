@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "initialized": false,
+  "initialized": true,
   "failureCount": 0,
   "detailCursor": 0,
-  "lastCheckedAt": null,
-  "products": {}
+  "products": {},
+  "lastCheckedAt": "2026-08-03T08:43:18.880Z"
 }
