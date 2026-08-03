@@ -59,7 +59,10 @@ export async function scrapeEql(config, state, debugDir) {
     }
 
     const mergedList = mergeProducts(products);
-    const detailTargets = selectDetailTargets(mergedList, state, config);
+    // API inspection and first baseline capture only the brand-list data.
+    // Opening detail pages at this stage triggers EQL access limits and can exceed the workflow timeout.
+    const skipDetailChecks = config.runMode === 'inspect-api' || !state.initialized || config.runMode === 'reset-baseline';
+    const detailTargets = skipDetailChecks ? [] : selectDetailTargets(mergedList, state, config);
     const detailProducts = [];
 
     if (detailTargets.length) {
