@@ -13,6 +13,8 @@ const EMPTY_STATE = {
 };
 
 const config = loadConfig();
+console.log(`실행 모드: ${config.runMode}`);
+console.log(`상세 확인 설정: 실행당 ${config.detailChecksPerRun}개`);
 let state = readJson(paths.state, EMPTY_STATE);
 state = { ...EMPTY_STATE, ...state, products: state.products || {} };
 

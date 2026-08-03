@@ -16,41 +16,77 @@ import { ensureDir, nowIso, sleep } from './utils.js';
 export async function scrapeEql(config, state, debugDir) {
   ensureDir(debugDir);
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    locale: 'ko-KR',
-    timezoneId: config.timezone,
-    viewport: { width: 1440, height: 1200 },
-    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36'
-  });
-  await context.setExtraHTTPHeaders({
-    'accept-language': 'ko-KR,ko;q=0.9,en-US;q=0.7,en;q=0.6'
-  });
-
   const apiLog = [];
   const products = [];
+  const failedBrands = [];
+
   try {
     for (const brand of config.brands) {
-      const brandProducts = await scrapeBrand(context, brand, config, apiLog, debugDir);
-      products.push(...brandProducts.slice(0, config.maxProductsPerBrand));
-      await sleep(config.requestDelayMs);
+      let brandProducts = [];
+      let lastError = null;
+
+      for (let attempt = 1; attempt <= config.brandRetryCount; attempt += 1) {
+        const context = await createBrowserContext(browser, config);
+        try {
+          brandProducts = await scrapeBrand(context, brand, config, apiLog, debugDir);
+          lastError = null;
+          break;
+        } catch (error) {
+          lastError = error;
+          console.warn(`${brand.name} 수집 실패 (${attempt}/${config.brandRetryCount}): ${error.message}`);
+          apiLog.push({
+            type: 'brand-error',
+            brand: brand.name,
+            attempt,
+            message: error.message
+          });
+        } finally {
+          await context.close().catch(() => {});
+        }
+
+        if (attempt < config.brandRetryCount) {
+          await sleep(config.brandRetryDelayMs * attempt);
+        }
+      }
+
+      if (lastError) {
+        failedBrands.push({ brand: brand.name, message: lastError.message });
+      } else {
+        products.push(...brandProducts.slice(0, config.maxProductsPerBrand));
+      }
+
+      await sleep(config.brandDelayMs + Math.floor(Math.random() * 1200));
     }
 
     const mergedList = mergeProducts(products);
-    const detailTargets = selectDetailTargets(mergedList, state, config);
+    // API inspection and first baseline capture only the brand-list data.
+    // Opening detail pages at this stage triggers EQL access limits and can exceed the workflow timeout.
+    const skipDetailChecks = config.runMode === 'inspect-api' || !state.initialized || config.runMode === 'reset-baseline';
+    const detailTargets = skipDetailChecks ? [] : selectDetailTargets(mergedList, state, config);
+    console.log(`상세 확인 대상: ${detailTargets.length}개${skipDetailChecks ? ' (현재 모드에서는 상세 조회 생략)' : ''}`);
     const detailProducts = [];
-    for (const target of detailTargets) {
+
+    if (detailTargets.length) {
+      const detailContext = await createBrowserContext(browser, config);
       try {
-        const detail = await scrapeProductDetail(context, target.url, target.brand, config, apiLog, debugDir);
-        if (detail) detailProducts.push(detail);
-      } catch (error) {
-        console.warn(`상세 확인 실패 (${target.url}): ${error.message}`);
+        for (const target of detailTargets) {
+          try {
+            const detail = await scrapeProductDetail(detailContext, target.url, target.brand, config, apiLog, debugDir);
+            if (detail) detailProducts.push(detail);
+          } catch (error) {
+            console.warn(`상세 확인 실패 (${target.url}): ${error.message}`);
+          }
+          await sleep(config.requestDelayMs + Math.floor(Math.random() * 500));
+        }
+      } finally {
+        await detailContext.close().catch(() => {});
       }
-      await sleep(config.requestDelayMs);
     }
 
+    const detailIds = new Set(detailProducts.map((detail) => detail.id));
     const finalProducts = mergeProducts([...mergedList, ...detailProducts]).map((product) => ({
       ...finalizeProduct(product, product.brand),
-      detailCheckedAt: detailProducts.some((detail) => detail.id === product.id) ? nowIso() : null
+      detailCheckedAt: detailIds.has(product.id) ? nowIso() : null
     }));
 
     fs.writeFileSync(path.join(debugDir, 'api-map.json'), `${JSON.stringify(apiLog, null, 2)}\n`, 'utf8');
@@ -60,11 +96,25 @@ export async function scrapeEql(config, state, debugDir) {
       products: finalProducts,
       detailTargetCount: detailTargets.length,
       apiCount: apiLog.length,
+      failedBrands,
       collectedAt: nowIso()
     };
   } finally {
     await browser.close().catch(() => {});
   }
+}
+
+async function createBrowserContext(browser, config) {
+  const context = await browser.newContext({
+    locale: 'ko-KR',
+    timezoneId: config.timezone,
+    viewport: { width: 1440, height: 1200 },
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36'
+  });
+  await context.setExtraHTTPHeaders({
+    'accept-language': 'ko-KR,ko;q=0.9,en-US;q=0.7,en;q=0.6'
+  });
+  return context;
 }
 
 async function scrapeBrand(context, brand, config, apiLog, debugDir) {
@@ -198,17 +248,26 @@ function selectDetailTargets(products, state, config) {
   }
 
   const list = [...map.values()].filter((product) => product.url).sort((a, b) => a.id.localeCompare(b.id));
-  const newProducts = list.filter((product) => !state.products?.[product.id]);
+  const limit = Math.max(0, Number(config.detailChecksPerRun || 0));
+  if (!limit) return [];
+
   const pinnedIds = new Set(config.detailProductUrls.map(normalizeProductId).filter(Boolean));
   const pinned = list.filter((product) => pinnedIds.has(product.id));
-  const normal = list.filter((product) => !pinnedIds.has(product.id));
-  const limit = config.detailChecksPerRun;
-  const cursor = Math.max(0, Number(state.detailCursor || 0));
-  const rotating = [];
-  for (let index = 0; index < Math.min(limit, normal.length); index += 1) {
-    rotating.push(normal[(cursor + index) % normal.length]);
+  const newProducts = list.filter((product) => !state.products?.[product.id] && !pinnedIds.has(product.id));
+  const normal = list.filter((product) => state.products?.[product.id] && !pinnedIds.has(product.id));
+  const selected = [...pinned];
+
+  for (const product of newProducts) {
+    if (selected.length >= Math.max(limit, pinned.length)) break;
+    selected.push(product);
   }
-  return mergeProducts([...pinned, ...newProducts, ...rotating]);
+
+  const cursor = Math.max(0, Number(state.detailCursor || 0));
+  for (let index = 0; selected.length < Math.max(limit, pinned.length) && index < normal.length; index += 1) {
+    selected.push(normal[(cursor + index) % normal.length]);
+  }
+
+  return mergeProducts(selected);
 }
 
 function withPageNumber(url, pageNumber) {
