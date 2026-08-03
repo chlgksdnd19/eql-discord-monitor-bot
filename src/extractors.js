@@ -181,7 +181,7 @@ export function normalizeProductId(value) {
   const text = String(value);
   const urlMatch = text.match(/\/product\/([A-Za-z0-9_-]+)\/detail/i);
   const candidate = urlMatch?.[1] || text.trim();
-  return /^GM[A-Za-z0-9_-]{8,}$/i.test(candidate) ? candidate : null;
+  return /^G[A-Z][A-Za-z0-9_-]{8,}$/i.test(candidate) ? candidate : null;
 }
 
 export function normalizeProductUrl(value, id) {
@@ -258,7 +258,7 @@ function normalizeProductCode(value) {
   if (!text || text.length < 4 || text.length > 60) return null;
   if (!/[A-Z]/.test(text) || !/\d/.test(text)) return null;
   if (/^https?$|^WWW$|^EQL$/.test(text)) return null;
-  if (/^GM[A-Z0-9_-]{8,}$/i.test(text)) return null;
+  if (/^G[A-Z][A-Z0-9_-]{8,}$/i.test(text)) return null;
   return text;
 }
 

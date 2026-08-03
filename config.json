@@ -3,42 +3,49 @@
     {
       "name": "ASICS",
       "code": "BDMA01E93",
-      "url": "https://www.eqlstore.com/display/productsList?brndCategoryNumber=BDMA01E93&selectCtgryNo=EQL&mallGubun=BRND&ctgryType=BRND&dspEqlOtltYn=Y&sort=MD_RECOMMEND_SEQ&page=1&exclusiveGodYn=N&dcGodYn=N&excludeSoldoutGodYn=N&preOrderGodYn=N"
+      "searchTerm": "아식스",
+      "url": "https://www.eqlstore.com/public/search/view?searchWord=%EC%95%84%EC%8B%9D%EC%8A%A4&tabContent0="
     },
     {
       "name": "ONITSUKA TIGER",
       "code": "BDMA01Z06",
-      "url": "https://www.eqlstore.com/display/productsList?brndCategoryNumber=BDMA01Z06&selectCtgryNo=EQL&mallGubun=BRND&ctgryType=BRND&dspEqlOtltYn=Y&sort=MD_RECOMMEND_SEQ&page=1&exclusiveGodYn=N&dcGodYn=N&excludeSoldoutGodYn=N&preOrderGodYn=N"
+      "searchTerm": "오니츠카타이거",
+      "url": "https://www.eqlstore.com/public/search/view?searchWord=%EC%98%A4%EB%8B%88%EC%B8%A0%EC%B9%B4%ED%83%80%EC%9D%B4%EA%B1%B0&tabContent0="
     },
     {
       "name": "ARC'TERYX",
       "code": "BDMA01M02",
-      "url": "https://www.eqlstore.com/display/productsList?brndCategoryNumber=BDMA01M02&selectCtgryNo=EQL&mallGubun=BRND&ctgryType=BRND&dspEqlOtltYn=Y&sort=MD_RECOMMEND_SEQ&page=1&exclusiveGodYn=N&dcGodYn=N&excludeSoldoutGodYn=N&preOrderGodYn=N"
+      "searchTerm": "아크테릭스",
+      "url": "https://www.eqlstore.com/public/search/view?searchWord=%EC%95%84%ED%81%AC%ED%85%8C%EB%A6%AD%EC%8A%A4&tabContent0="
     },
     {
       "name": "ADIDAS",
       "code": "BDMA01E54",
-      "url": "https://www.eqlstore.com/display/productsList?brndCategoryNumber=BDMA01E54&selectCtgryNo=EQL&mallGubun=BRND&ctgryType=BRND&dspEqlOtltYn=Y&sort=MD_RECOMMEND_SEQ&page=1&exclusiveGodYn=N&dcGodYn=N&excludeSoldoutGodYn=N&preOrderGodYn=N"
+      "searchTerm": "아디다스",
+      "url": "https://www.eqlstore.com/public/search/view?searchWord=%EC%95%84%EB%94%94%EB%8B%A4%EC%8A%A4&tabContent0="
     },
     {
       "name": "MONTBELL",
       "code": "BDMA0195H",
-      "url": "https://www.eqlstore.com/display/productsList?brndCategoryNumber=BDMA0195H&selectCtgryNo=EQL&mallGubun=BRND&ctgryType=BRND&dspEqlOtltYn=Y&sort=MD_RECOMMEND_SEQ&page=1&exclusiveGodYn=N&dcGodYn=N&excludeSoldoutGodYn=N&preOrderGodYn=N"
+      "searchTerm": "몽벨",
+      "url": "https://www.eqlstore.com/public/search/view?searchWord=%EB%AA%BD%EB%B2%A8&tabContent0="
     },
     {
       "name": "NIKE",
       "code": "BDMA01C18",
-      "url": "https://www.eqlstore.com/display/productsList?brndCategoryNumber=BDMA01C18&selectCtgryNo=EQL&mallGubun=BRND&ctgryType=BRND&dspEqlOtltYn=Y&sort=MD_RECOMMEND_SEQ&page=1&exclusiveGodYn=N&dcGodYn=N&excludeSoldoutGodYn=N&preOrderGodYn=N"
+      "searchTerm": "나이키",
+      "url": "https://www.eqlstore.com/public/search/view?searchWord=%EB%82%98%EC%9D%B4%ED%82%A4&tabContent0="
     }
   ],
-  "maxPagesPerBrand": 35,
+  "maxPagesPerBrand": 1,
   "maxProductsPerBrand": 1200,
-  "pageWaitMs": 2200,
-  "requestDelayMs": 450,
+  "pageWaitMs": 2500,
+  "requestDelayMs": 500,
   "detailChecksPerRun": 24,
   "detailProductUrls": [],
   "notifyOnBaseline": false,
   "notifyOnErrors": false,
   "errorAlertAfterFailures": 3,
-  "timezone": "Asia/Seoul"
+  "timezone": "Asia/Seoul",
+  "loadMoreClicksPerBrand": 18
 }

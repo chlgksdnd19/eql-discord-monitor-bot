@@ -81,7 +81,8 @@ async function scrapeBrand(context, brand, config, apiLog, debugDir) {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
       await page.waitForTimeout(config.pageWaitMs);
       await detectBlockedPage(page);
-      await progressiveScroll(page, 7);
+      await progressiveScroll(page, 5);
+      await expandProductList(page, config.maxProductsPerBrand, config.loadMoreClicksPerBrand || 12);
       await page.waitForTimeout(900);
 
       const jsonProducts = responses.flatMap((entry) => extractProductsFromJson(entry.data, brand.name));
@@ -107,6 +108,11 @@ async function scrapeBrand(context, brand, config, apiLog, debugDir) {
       }));
       const domProducts = domRaw.map((raw) => extractDomCard(raw, brand.name)).filter(Boolean);
       const pageProducts = mergeProducts([...jsonProducts, ...domProducts]);
+      const productAnchorCount = await page.locator('a[href*="/product/"][href*="/detail"]').count();
+      console.log(`${brand.name} DOM 상품 링크 ${productAnchorCount}개, JSON 후보 ${jsonProducts.length}개`);
+      if (!pageProducts.length) {
+        await saveDebug(page, debugDir, `zero-${brand.code}-page-${pageNumber}`);
+      }
       const before = new Set(all.map((product) => product.id));
       const added = pageProducts.filter((product) => !before.has(product.id));
       all.push(...pageProducts);
@@ -231,6 +237,40 @@ function attachJsonCollector(page, output, apiLog) {
       // DOM parsing remains as fallback when a response body is unavailable.
     }
   });
+}
+
+async function expandProductList(page, maxProducts, maxClicks) {
+  let stableRounds = 0;
+  for (let round = 0; round < maxClicks; round += 1) {
+    const before = await page.locator('a[href*="/product/"][href*="/detail"]').count();
+    if (before >= maxProducts) break;
+
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(700);
+
+    const buttons = page.getByRole('button', { name: /^더 보기$/ });
+    const buttonCount = await buttons.count();
+    let increased = false;
+    for (let index = 0; index < buttonCount; index += 1) {
+      const button = buttons.nth(index);
+      if (!(await button.isVisible().catch(() => false))) continue;
+      await button.click({ timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(900);
+      const afterClick = await page.locator('a[href*="/product/"][href*="/detail"]').count();
+      if (afterClick > before) {
+        increased = true;
+        break;
+      }
+    }
+
+    const after = await page.locator('a[href*="/product/"][href*="/detail"]').count();
+    if (after > before || increased) {
+      stableRounds = 0;
+      continue;
+    }
+    stableRounds += 1;
+    if (stableRounds >= 2) break;
+  }
 }
 
 async function progressiveScroll(page, rounds) {
