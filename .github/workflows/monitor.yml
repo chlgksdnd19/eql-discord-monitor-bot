@@ -1,4 +1,4 @@
-name: EQL Brand Discord Monitor
+name: EQL Brand Discord Monitor v6
 
 on:
   workflow_dispatch:
@@ -20,16 +20,79 @@ permissions:
   contents: write
 
 concurrency:
-  group: eql-brand-discord-monitor
+  group: eql-brand-discord-monitor-v6
   cancel-in-progress: false
 
 jobs:
-  monitor:
+  test-webhook:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'test-webhook' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 3
+    steps:
+      - name: 저장소 불러오기
+        uses: actions/checkout@v4
+
+      - name: Node.js 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Discord 웹훅 테스트
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RUN_MODE: test-webhook
+        run: node monitor.js
+
+  validate:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode != 'test-webhook' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 저장소 불러오기
+        uses: actions/checkout@v4
+
+      - name: Node.js 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Node 모듈 설치
+        run: npm install --no-audit --no-fund
+
+      - name: 코드 검사
+        run: npm run check && npm test
+
+  collect:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode != 'test-webhook' }}
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     container:
       image: mcr.microsoft.com/playwright:v1.62.0-noble
       options: --user 1001
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        include:
+          - code: BDMA01E93
+            name: ASICS
+            delay: 0
+          - code: BDMA01Z06
+            name: ONITSUKA TIGER
+            delay: 20
+          - code: BDMA01M02
+            name: ARC'TERYX
+            delay: 40
+          - code: BDMA01E54
+            name: ADIDAS
+            delay: 60
+          - code: BDMA0195H
+            name: MONTBELL
+            delay: 80
+          - code: BDMA01C18
+            name: NIKE
+            delay: 100
 
     steps:
       - name: 저장소 불러오기
@@ -38,33 +101,92 @@ jobs:
       - name: Node 모듈 설치
         run: npm install --no-audit --no-fund
 
-      - name: 코드 검사
-        run: npm run check && npm test
-
-      - name: EQL 브랜드 확인
+      - name: ${{ matrix.name }} 독립 수집
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          RUN_MODE: ${{ inputs.mode || 'monitor' }}
-        run: npm run monitor
+          RUN_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'monitor' }}
+          BRAND_CODE: ${{ matrix.code }}
+          START_DELAY_SECONDS: ${{ matrix.delay }}
+        run: npm run collect-brand
 
-      - name: API 점검 자료 업로드
-        if: ${{ failure() || inputs.mode == 'inspect-api' }}
+      - name: ${{ matrix.name }} 수집 결과 업로드
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: eql-debug-${{ github.run_number }}
-          path: debug/
+          name: eql-brand-${{ matrix.code }}
+          path: |
+            out/${{ matrix.code }}.json
+            debug/${{ matrix.code }}/
+          if-no-files-found: warn
+          retention-days: 7
+
+  aggregate:
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.mode != 'test-webhook') }}
+    needs:
+      - validate
+      - collect
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 저장소 불러오기
+        uses: actions/checkout@v4
+
+      - name: Node.js 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 브랜드별 수집 결과 다운로드
+        uses: actions/download-artifact@v4
+        with:
+          pattern: eql-brand-*
+          path: collected
+          merge-multiple: true
+
+      - name: 결과 병합 · 변동 비교 · Discord 전송
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RUN_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'monitor' }}
+          RESULTS_DIR: collected/out
+        run: node monitor.js
+
+      - name: 점검 자료 업로드
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: eql-v6-debug-${{ github.run_number }}
+          path: collected/debug/
           if-no-files-found: ignore
           retention-days: 7
 
       - name: 변경된 기준값 저장
-        if: ${{ always() && inputs.mode != 'inspect-api' }}
+        if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.mode != 'inspect-api') }}
         run: |
+          if [ ! -f data/state.json ]; then
+            echo "state.json 변경 없음"
+            exit 0
+          fi
+
+          cp data/state.json /tmp/eql-state.json
+          git fetch origin main
+          git checkout -B main origin/main
+          cp /tmp/eql-state.json data/state.json
+
           git config user.name "eql-monitor[bot]"
           git config user.email "eql-monitor[bot]@users.noreply.github.com"
           git add data/state.json
+
           if git diff --cached --quiet; then
             echo "기준값 변경 없음"
-          else
-            git commit -m "chore: update EQL monitor state [skip ci]"
-            git push
+            exit 0
           fi
+
+          git commit -m "chore: update EQL monitor state [skip ci]"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "push 재시도 ${attempt}/3"
+            git pull --rebase origin main
+            sleep $((attempt * 3))
+          done
+          exit 1
