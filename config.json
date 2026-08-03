@@ -4,51 +4,82 @@
       "name": "ASICS",
       "code": "BDMA01E93",
       "searchTerm": "아식스",
+      "aliases": [
+        "ASICS",
+        "아식스"
+      ],
+      "minimumProducts": 20,
       "url": "https://www.eqlstore.com/public/search/view?searchWord=%EC%95%84%EC%8B%9D%EC%8A%A4&tabContent0="
     },
     {
       "name": "ONITSUKA TIGER",
       "code": "BDMA01Z06",
       "searchTerm": "오니츠카타이거",
+      "aliases": [
+        "ONITSUKA TIGER",
+        "오니츠카 타이거",
+        "오니츠카타이거"
+      ],
+      "minimumProducts": 15,
       "url": "https://www.eqlstore.com/public/search/view?searchWord=%EC%98%A4%EB%8B%88%EC%B8%A0%EC%B9%B4%ED%83%80%EC%9D%B4%EA%B1%B0&tabContent0="
     },
     {
       "name": "ARC'TERYX",
       "code": "BDMA01M02",
       "searchTerm": "아크테릭스",
+      "aliases": [
+        "ARC'TERYX",
+        "ARC’TERYX",
+        "아크테릭스"
+      ],
+      "minimumProducts": 15,
       "url": "https://www.eqlstore.com/public/search/view?searchWord=%EC%95%84%ED%81%AC%ED%85%8C%EB%A6%AD%EC%8A%A4&tabContent0="
     },
     {
       "name": "ADIDAS",
       "code": "BDMA01E54",
       "searchTerm": "아디다스",
+      "aliases": [
+        "ADIDAS",
+        "아디다스"
+      ],
+      "minimumProducts": 15,
       "url": "https://www.eqlstore.com/public/search/view?searchWord=%EC%95%84%EB%94%94%EB%8B%A4%EC%8A%A4&tabContent0="
     },
     {
       "name": "MONTBELL",
       "code": "BDMA0195H",
       "searchTerm": "몽벨",
+      "aliases": [
+        "MONTBELL",
+        "몽벨"
+      ],
+      "minimumProducts": 10,
       "url": "https://www.eqlstore.com/public/search/view?searchWord=%EB%AA%BD%EB%B2%A8&tabContent0="
     },
     {
       "name": "NIKE",
       "code": "BDMA01C18",
       "searchTerm": "나이키",
+      "aliases": [
+        "NIKE",
+        "나이키"
+      ],
+      "minimumProducts": 15,
       "url": "https://www.eqlstore.com/public/search/view?searchWord=%EB%82%98%EC%9D%B4%ED%82%A4&tabContent0="
     }
   ],
   "maxPagesPerBrand": 1,
-  "maxProductsPerBrand": 250,
-  "pageWaitMs": 2200,
-  "requestDelayMs": 1200,
+  "maxProductsPerBrand": 180,
+  "pageWaitMs": 2000,
+  "requestDelayMs": 900,
   "detailChecksPerRun": 1,
   "detailProductUrls": [],
   "notifyOnBaseline": false,
   "notifyOnErrors": false,
   "errorAlertAfterFailures": 3,
   "timezone": "Asia/Seoul",
-  "loadMoreClicksPerBrand": 12,
-  "brandDelayMs": 3000,
-  "brandRetryCount": 1,
-  "brandRetryDelayMs": 10000
+  "loadMoreClicksPerBrand": 14,
+  "brandRetryCount": 2,
+  "brandRetryDelayMs": 8000
 }

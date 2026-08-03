@@ -47,3 +47,17 @@ test('상세 응답이 목록 정보보다 우선하며 기존 값을 합친다'
   assert.equal(merged.stockQuantity, 2);
   assert.equal(merged.options.length, 1);
 });
+
+test('숫자로만 구성된 아식스 품번도 검색 코드로 보존한다', () => {
+  const products = extractProductsFromJson({
+    items: [{
+      godNo: 'GP9026020423225',
+      godNm: '[아식스 본사]매직 스피드 5 112611103-100',
+      salePrice: 209000,
+      soldOutYn: 'N'
+    }]
+  }, 'ASICS');
+
+  assert.equal(products.length, 1);
+  assert.ok(products[0].productCodes.includes('112611103-100'));
+});

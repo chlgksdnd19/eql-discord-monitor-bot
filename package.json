@@ -1,12 +1,13 @@
 {
   "name": "eql-discord-bot-monitor",
-  "version": "3.0.0",
+  "version": "6.0.0",
   "private": true,
   "type": "module",
-  "description": "EQL six-brand monitor with Discord webhook alerts and slash-command product search",
+  "description": "EQL six-brand parallel monitor with Discord webhook alerts and slash-command product search",
   "scripts": {
     "monitor": "node monitor.js",
-    "check": "node --check monitor.js && node --check src/config.js && node --check src/utils.js && node --check src/extractors.js && node --check src/scraper.js && node --check src/discord.js",
+    "collect-brand": "node collect-brand.js",
+    "check": "node --check monitor.js && node --check collect-brand.js && node --check src/config.js && node --check src/utils.js && node --check src/extractors.js && node --check src/scraper.js && node --check src/discord.js",
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {

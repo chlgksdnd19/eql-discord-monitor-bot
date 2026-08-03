@@ -256,7 +256,10 @@ function extractCodesFromText(text, id) {
 function normalizeProductCode(value) {
   const text = cleanText(value, 120)?.toUpperCase().replace(/[–—]/g, '-').replace(/^[^A-Z0-9]+|[^A-Z0-9]+$/g, '');
   if (!text || text.length < 4 || text.length > 60) return null;
-  if (!/[A-Z]/.test(text) || !/\d/.test(text)) return null;
+  const hasLetter = /[A-Z]/.test(text);
+  const hasDigit = /\d/.test(text);
+  const structuredNumericCode = /^\d{4,}(?:[-_.]\d{2,})+$/.test(text);
+  if (!hasDigit || (!hasLetter && !structuredNumericCode)) return null;
   if (/^https?$|^WWW$|^EQL$/.test(text)) return null;
   if (/^G[A-Z][A-Z0-9_-]{8,}$/i.test(text)) return null;
   return text;

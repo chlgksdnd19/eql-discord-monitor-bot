@@ -1,22 +1,20 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { loadConfig, paths } from './src/config.js';
-import { buildErrorPayload, buildTestPayload, sendProductEvents, sendWebhook } from './src/discord.js';
-import { mergeTwoProducts } from './src/extractors.js';
-import { scrapeEql } from './src/scraper.js';
+import { buildTestPayload, sendProductEvents, sendWebhook } from './src/discord.js';
+import { mergeProducts, mergeTwoProducts } from './src/extractors.js';
 import { errorToString, nowIso, readJson, writeJsonAtomic } from './src/utils.js';
 
 const EMPTY_STATE = {
-  version: 2,
+  version: 3,
   initialized: false,
-  failureCount: 0,
-  detailCursor: 0,
-  products: {}
+  lastCheckedAt: null,
+  products: {},
+  brands: {}
 };
 
 const config = loadConfig();
 console.log(`실행 모드: ${config.runMode}`);
-console.log(`상세 확인 설정: 실행당 ${config.detailChecksPerRun}개`);
-let state = readJson(paths.state, EMPTY_STATE);
-state = { ...EMPTY_STATE, ...state, products: state.products || {} };
 
 if (!config.webhookUrl && config.runMode !== 'inspect-api') {
   throw new Error('GitHub 저장소 Secret에 DISCORD_WEBHOOK_URL을 등록해야 합니다.');
@@ -28,102 +26,232 @@ if (config.runMode === 'test-webhook') {
   process.exit(0);
 }
 
+let state = normalizeState(readJson(paths.state, EMPTY_STATE));
+const results = loadCollectorResults(config);
+printResultSummary(results);
+
+if (config.runMode === 'inspect-api') {
+  const failed = results.filter((result) => !result.ok);
+  const productCount = results.filter((result) => result.ok).reduce((sum, result) => sum + result.products.length, 0);
+  console.log(`병렬 점검 완료: 성공 ${results.length - failed.length}/${results.length}개 브랜드, 상품 ${productCount}개`);
+  if (failed.length) {
+    console.error(`점검 실패 브랜드: ${failed.map((result) => `${result.brand.name} (${result.error || '결과 없음'})`).join(', ')}`);
+    process.exitCode = 1;
+  }
+  process.exit();
+}
+
 if (config.runMode === 'reset-baseline') {
-  state = structuredClone(EMPTY_STATE);
+  const failed = results.filter((result) => !result.ok);
+  if (failed.length) {
+    throw new Error(`기준값 저장을 중단했습니다. 수집 실패 브랜드: ${failed.map((result) => result.brand.name).join(', ')}`);
+  }
+  state = createBaseline(results);
   writeJsonAtomic(paths.state, state);
-  console.log('기존 기준값을 초기화했습니다. 현재 상품 상태를 새 기준값으로 수집합니다.');
+  console.log(`EQL 기준값 저장 완료: ${Object.keys(state.products).length}개 상품. 디스코드 상품 알림은 보내지 않았습니다.`);
+  process.exit(0);
+}
+
+if (!state.initialized) {
+  const failed = results.filter((result) => !result.ok);
+  if (failed.length) {
+    throw new Error(`최초 기준값 저장을 보류했습니다. 수집 실패 브랜드: ${failed.map((result) => result.brand.name).join(', ')}`);
+  }
+  state = createBaseline(results);
+  writeJsonAtomic(paths.state, state);
+  console.log(`최초 기준값 저장 완료: ${Object.keys(state.products).length}개 상품. 다음 확인부터 변동만 알립니다.`);
+  process.exit(0);
 }
 
 try {
-  const result = await scrapeEql(config, state, paths.debug);
-  if (config.runMode === 'inspect-api') {
-    const failed = result.failedBrands || [];
-    console.log(`API 점검 완료: JSON/진단 항목 ${result.apiCount}개, 상품 ${result.products.length}개 추출, 실패 브랜드 ${failed.length}개`);
-    if (failed.length) {
-      console.error(`수집 실패 브랜드: ${failed.map((item) => `${item.brand} (${item.message})`).join(', ')}`);
-      process.exitCode = 1;
-    }
-    process.exit();
-  }
-
-  const failedBrands = result.failedBrands || [];
-  const detectedAt = result.collectedAt || nowIso();
-
-  if (!state.initialized && failedBrands.length) {
-    throw new Error(`기준값 저장을 중단했습니다. 수집 실패 브랜드: ${failedBrands.map((item) => item.brand).join(', ')}`);
-  }
-  if (failedBrands.length) {
-    console.warn(`이번 실행에서 건너뛴 브랜드: ${failedBrands.map((item) => item.brand).join(', ')}. 기존 저장값은 유지합니다.`);
-  }
-  const currentMap = new Map(result.products.map((product) => [product.id, product]));
-
-  if (!state.initialized) {
-    state.products = Object.fromEntries(result.products.map((product) => [product.id, storeProduct(product, detectedAt)]));
-    state.lastCheckedAt = detectedAt;
-    state.initialized = true;
-    state.failureCount = 0;
-    state.detailCursor = advanceCursor(state.detailCursor, result.products.length, config.detailChecksPerRun);
-    writeJsonAtomic(paths.state, state);
-    console.log(`EQL 기준값 저장 완료: ${result.products.length}개 상품. 디스코드 알림은 보내지 않았습니다.`);
-    process.exit(0);
-  }
-
   const events = [];
   const nextProducts = { ...state.products };
+  let latestCheckedAt = state.lastCheckedAt || null;
 
-  for (const [id, currentRaw] of currentMap) {
-    const previous = state.products[id] || null;
-    const current = mergeForComparison(previous, currentRaw);
-    current.firstSeenAt = previous?.firstSeenAt || detectedAt;
+  for (const result of results) {
+    const brandCode = result.brand.code;
+    const previousHealth = state.brands[brandCode] || createBrandHealth(result.brand);
 
-    if (!previous) {
-      current.lastChangedAt = detectedAt;
-      nextProducts[id] = current;
-      events.push({
-        types: ['new'],
-        product: current,
-        changes: ['🆕 선택한 브랜드에 새 상품이 등록되었습니다.'],
-        detectedAt
-      });
+    if (!result.ok) {
+      state.brands[brandCode] = {
+        ...previousHealth,
+        name: result.brand.name,
+        code: brandCode,
+        failureCount: Number(previousHealth.failureCount || 0) + 1,
+        lastError: result.error || '수집 결과 파일 없음',
+        lastErrorAt: nowIso()
+      };
+      console.warn(`${result.brand.name}: 수집 실패로 기존 저장값 유지`);
       continue;
     }
 
-    const comparison = compareProduct(previous, current);
-    current.lastChangedAt = comparison.types.length ? detectedAt : (previous.lastChangedAt || previous.firstSeenAt || detectedAt);
-    nextProducts[id] = current;
-    if (comparison.types.length) events.push({ ...comparison, product: current, detectedAt });
+    const detectedAt = result.collectedAt || nowIso();
+    if (!latestCheckedAt || new Date(detectedAt) > new Date(latestCheckedAt)) latestCheckedAt = detectedAt;
+    state.brands[brandCode] = {
+      ...previousHealth,
+      name: result.brand.name,
+      code: brandCode,
+      failureCount: 0,
+      detailCursor: Math.max(0, Number(result.nextDetailCursor || 0)),
+      lastCheckedAt: detectedAt,
+      productCount: result.products.length,
+      lastError: null,
+      lastErrorAt: null
+    };
+
+    for (const currentRaw of result.products) {
+      const id = currentRaw.id;
+      if (!id) continue;
+      const previous = state.products[id] || null;
+      const current = mergeForComparison(previous, currentRaw);
+      current.brandCode = brandCode;
+      current.firstSeenAt = previous?.firstSeenAt || detectedAt;
+
+      if (!previous) {
+        current.lastChangedAt = detectedAt;
+        nextProducts[id] = current;
+        events.push({
+          types: ['new'],
+          product: current,
+          changes: ['🆕 선택한 브랜드에 새 상품이 등록되었습니다.'],
+          detectedAt
+        });
+        continue;
+      }
+
+      const comparison = compareProduct(previous, current);
+      current.lastChangedAt = comparison.types.length
+        ? detectedAt
+        : (previous.lastChangedAt || previous.firstSeenAt || detectedAt);
+      nextProducts[id] = current;
+      if (comparison.types.length) events.push({ ...comparison, product: current, detectedAt });
+    }
   }
 
+  state.version = 3;
   state.products = nextProducts;
-  state.lastCheckedAt = detectedAt;
-  state.failureCount = 0;
-  state.detailCursor = advanceCursor(state.detailCursor, result.products.length, config.detailChecksPerRun);
-  delete state.lastError;
-  delete state.lastErrorAt;
+  state.lastCheckedAt = latestCheckedAt || nowIso();
   writeJsonAtomic(paths.state, state);
 
   if (events.length) {
     console.log(`${events.length}개 EQL 상품에서 변경을 감지했습니다.`);
     await sendProductEvents(config.webhookUrl, events, config);
   } else {
-    console.log(`변경 없음: ${result.products.length}개 상품 확인 완료. 디스코드 전송 없음.`);
+    const successCount = results.filter((result) => result.ok).length;
+    console.log(`변경 없음: ${successCount}/${results.length}개 브랜드 확인. 디스코드 전송 없음.`);
   }
 } catch (error) {
-  const message = errorToString(error);
-  state.failureCount = (state.failureCount || 0) + 1;
-  state.lastErrorAt = nowIso();
-  state.lastError = message;
-  writeJsonAtomic(paths.state, state);
+  console.error(errorToString(error));
+  process.exitCode = 1;
+}
 
-  if (config.notifyOnErrors && state.failureCount === config.errorAlertAfterFailures) {
+function loadCollectorResults(config) {
+  const results = [];
+  for (const brand of config.brands) {
+    const file = path.join(config.resultsDir, `${brand.code}.json`);
+    let raw = null;
     try {
-      await sendWebhook(config.webhookUrl, buildErrorPayload(config, state.failureCount, message));
-    } catch (webhookError) {
-      console.error('오류 알림 전송 실패:', errorToString(webhookError));
+      raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+      raw = null;
+    }
+    results.push(normalizeResult(raw, brand));
+  }
+  return results;
+}
+
+function normalizeResult(raw, brand) {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      brand: { name: brand.name, code: brand.code },
+      ok: false,
+      products: [],
+      error: 'collector 결과 파일이 없습니다.',
+      collectedAt: null,
+      nextDetailCursor: 0,
+      detailTargetCount: 0
+    };
+  }
+  return {
+    ...raw,
+    brand: {
+      name: raw.brand?.name || brand.name,
+      code: raw.brand?.code || brand.code
+    },
+    ok: raw.ok === true,
+    products: Array.isArray(raw.products) ? mergeProducts(raw.products) : [],
+    error: raw.error ? String(raw.error) : null,
+    collectedAt: raw.collectedAt || null,
+    nextDetailCursor: Math.max(0, Number(raw.nextDetailCursor || 0)),
+    detailTargetCount: Math.max(0, Number(raw.detailTargetCount || 0))
+  };
+}
+
+function printResultSummary(results) {
+  for (const result of results) {
+    if (result.ok) {
+      console.log(`${result.brand.name}: 상품 ${result.products.length}개, 상세 ${result.detailTargetCount}개, 성공`);
+    } else {
+      console.warn(`${result.brand.name}: 수집 보류 - ${result.error || '알 수 없는 오류'}`);
     }
   }
-  console.error(message);
-  process.exitCode = 1;
+}
+
+function createBaseline(results) {
+  const detectedAt = results
+    .map((result) => result.collectedAt)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || nowIso();
+  const products = {};
+  const brands = {};
+
+  for (const result of results) {
+    brands[result.brand.code] = {
+      name: result.brand.name,
+      code: result.brand.code,
+      failureCount: 0,
+      detailCursor: Math.max(0, Number(result.nextDetailCursor || 0)),
+      lastCheckedAt: result.collectedAt || detectedAt,
+      productCount: result.products.length,
+      lastError: null,
+      lastErrorAt: null
+    };
+    for (const product of result.products) {
+      if (!product?.id) continue;
+      products[product.id] = storeProduct({ ...product, brandCode: result.brand.code }, result.collectedAt || detectedAt);
+    }
+  }
+
+  return {
+    version: 3,
+    initialized: true,
+    lastCheckedAt: detectedAt,
+    products,
+    brands
+  };
+}
+
+function normalizeState(value) {
+  const state = value && typeof value === 'object' ? structuredClone(value) : structuredClone(EMPTY_STATE);
+  state.version = 3;
+  state.initialized = state.initialized === true;
+  state.products = state.products && typeof state.products === 'object' ? state.products : {};
+  state.brands = state.brands && typeof state.brands === 'object' ? state.brands : {};
+  return state;
+}
+
+function createBrandHealth(brand) {
+  return {
+    name: brand.name,
+    code: brand.code,
+    failureCount: 0,
+    detailCursor: 0,
+    productCount: 0,
+    lastCheckedAt: null,
+    lastError: null,
+    lastErrorAt: null
+  };
 }
 
 function storeProduct(product, detectedAt) {
@@ -222,9 +350,4 @@ function formatPrice(value) {
 
 function formatRate(value) {
   return value === null || value === undefined ? '확인 불가' : `${Math.round(Number(value))}%`;
-}
-
-function advanceCursor(cursor, productCount, checksPerRun) {
-  if (!productCount || !checksPerRun) return 0;
-  return (Math.max(0, Number(cursor || 0)) + checksPerRun) % productCount;
 }
