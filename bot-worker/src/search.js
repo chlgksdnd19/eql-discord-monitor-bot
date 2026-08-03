@@ -29,7 +29,7 @@ export function productToEmbed(product, state) {
     color: product.soldOut === true ? 0xe74c3c : 0x2ecc71,
     thumbnail: product.imageUrl ? { url: product.imageUrl } : undefined,
     fields,
-    footer: { text: 'EQL 모니터가 마지막으로 저장한 공개 정보를 표시합니다.' }
+    footer: { text: footerText(product) }
   };
 }
 
@@ -77,28 +77,51 @@ function formatPriceBlock(product) {
 
 function formatStock(product) {
   const lines = [];
-  if (isNumber(product.stockQuantity)) {
-    lines.push(`전체 공개 재고: ${Math.max(0, Math.trunc(Number(product.stockQuantity))).toLocaleString('ko-KR')}개`);
+  const live = product.liveStock;
+
+  if (live?.ok) {
+    if (product.stockQuantityExact === true && isNumber(product.stockQuantity)) {
+      lines.push(`실시간 전체 공개 재고: ${Math.max(0, Math.trunc(Number(product.stockQuantity))).toLocaleString('ko-KR')}개`);
+    } else if (isNumber(product.stockMinimumQuantity)) {
+      lines.push(`실시간 공개 최소 재고: ${Math.max(0, Math.trunc(Number(product.stockMinimumQuantity))).toLocaleString('ko-KR')}개 이상`);
+    } else if (product.soldOut === true) {
+      lines.push('실시간 전체 상태: 품절');
+    }
+  } else if (isNumber(product.stockQuantity)) {
+    lines.push(`저장된 전체 공개 재고: ${Math.max(0, Math.trunc(Number(product.stockQuantity))).toLocaleString('ko-KR')}개`);
   } else if (product.soldOut === true) {
-    lines.push('전체 상태: 품절');
+    lines.push('저장된 전체 상태: 품절');
   } else if (product.soldOut === false) {
-    lines.push('전체 상태: 판매 가능');
+    lines.push('저장된 전체 상태: 판매 가능');
   } else {
-    lines.push(`전체 상태: ${product.stockStatus || '확인 불가'}`);
+    lines.push(`저장된 전체 상태: ${product.stockStatus || '확인 불가'}`);
   }
 
   const options = (product.options || []).slice(0, 25);
   if (options.length) {
-    lines.push('', '옵션별 상태');
+    lines.push('', live?.ok ? '실시간 옵션별 재고' : '저장된 옵션별 상태');
     for (const option of options) {
       let status = option.stockStatus || '확인 불가';
-      if (isNumber(option.stockQuantity)) status = `${Math.max(0, Math.trunc(Number(option.stockQuantity)))}개`;
-      else if (option.soldOut === true) status = '품절';
+      if (option.soldOut === true) status = '품절';
+      else if (isNumber(option.stockQuantity)) status = `${Math.max(0, Math.trunc(Number(option.stockQuantity)))}개`;
+      else if (isNumber(option.minimumQuantity)) status = `${Math.max(0, Math.trunc(Number(option.minimumQuantity)))}개 이상`;
       else if (option.soldOut === false) status = '판매 가능';
       lines.push(`${option.name}: ${status}`);
     }
   }
+
+  if (live?.ok && product.stockQuantityExact !== true) {
+    lines.push('', '※ EQL 공개 화면은 품절 임박 수량만 숫자로 표시합니다. 숫자가 없는 판매 가능 옵션은 6개 이상으로 표기합니다.');
+  } else if (live?.ok !== true && live?.error) {
+    lines.push('', `⚠️ 실시간 재고 확인 실패: ${live.error}`);
+  }
   return safe(lines.join('\n'), 1024);
+}
+
+function footerText(product) {
+  if (product.liveStock?.ok) return 'EQL 상품 페이지를 방금 조회한 공개 재고입니다.';
+  if (product.liveStock?.error) return '실시간 조회에 실패해 마지막 모니터링 정보를 표시합니다.';
+  return 'EQL 모니터가 마지막으로 저장한 공개 정보를 표시합니다.';
 }
 
 function formatKoreanTime(value) {

@@ -8,11 +8,11 @@ if (!guildId) throw new Error('DISCORD_GUILD_ID가 필요합니다.');
 
 const commands = [{
   name: '상품검색',
-  description: 'EQL 모니터링 상품을 품번으로 검색합니다.',
+  description: 'EQL 상품을 품번으로 검색하고 공개 재고를 실시간 확인합니다.',
   type: 1,
   options: [{
     name: '품번',
-    description: '제조사 품번 또는 EQL 상품번호(GM…)를 입력하세요.',
+    description: '제조사 품번 또는 EQL 상품번호(GP/GM…)를 입력하세요.',
     type: 3,
     required: true,
     min_length: 2,
