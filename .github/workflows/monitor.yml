@@ -26,7 +26,7 @@ concurrency:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     container:
       image: mcr.microsoft.com/playwright:v1.62.0-noble
       options: --user 1001
