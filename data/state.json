@@ -10988,62 +10988,62 @@
     "BDMA01E93": {
       "name": "ASICS",
       "code": "BDMA01E93",
-      "failureCount": 349,
+      "failureCount": 350,
       "detailCursor": 0,
       "lastCheckedAt": "2026-08-03T13:56:25.730Z",
       "productCount": 86,
       "lastError": "collector 결과 파일이 없습니다.",
-      "lastErrorAt": "2026-09-02T16:30:18.499Z"
+      "lastErrorAt": "2026-09-02T19:28:08.643Z"
     },
     "BDMA01Z06": {
       "name": "ONITSUKA TIGER",
       "code": "BDMA01Z06",
-      "failureCount": 349,
+      "failureCount": 350,
       "detailCursor": 0,
       "lastCheckedAt": "2026-08-03T13:56:46.280Z",
       "productCount": 96,
       "lastError": "collector 결과 파일이 없습니다.",
-      "lastErrorAt": "2026-09-02T16:30:18.499Z"
+      "lastErrorAt": "2026-09-02T19:28:08.643Z"
     },
     "BDMA01M02": {
       "name": "ARC'TERYX",
       "code": "BDMA01M02",
-      "failureCount": 349,
+      "failureCount": 350,
       "detailCursor": 0,
       "lastCheckedAt": "2026-08-03T13:57:08.837Z",
       "productCount": 106,
       "lastError": "collector 결과 파일이 없습니다.",
-      "lastErrorAt": "2026-09-02T16:30:18.499Z"
+      "lastErrorAt": "2026-09-02T19:28:08.644Z"
     },
     "BDMA01E54": {
       "name": "ADIDAS",
       "code": "BDMA01E54",
-      "failureCount": 349,
+      "failureCount": 350,
       "detailCursor": 0,
       "lastCheckedAt": "2026-08-03T13:57:35.159Z",
       "productCount": 98,
       "lastError": "collector 결과 파일이 없습니다.",
-      "lastErrorAt": "2026-09-02T16:30:18.499Z"
+      "lastErrorAt": "2026-09-02T19:28:08.644Z"
     },
     "BDMA0195H": {
       "name": "MONTBELL",
       "code": "BDMA0195H",
-      "failureCount": 349,
+      "failureCount": 350,
       "detailCursor": 0,
       "lastCheckedAt": "2026-08-03T13:57:44.059Z",
       "productCount": 74,
       "lastError": "collector 결과 파일이 없습니다.",
-      "lastErrorAt": "2026-09-02T16:30:18.499Z"
+      "lastErrorAt": "2026-09-02T19:28:08.644Z"
     },
     "BDMA01C18": {
       "name": "NIKE",
       "code": "BDMA01C18",
-      "failureCount": 349,
+      "failureCount": 350,
       "detailCursor": 0,
       "lastCheckedAt": "2026-08-03T13:58:04.340Z",
       "productCount": 80,
       "lastError": "collector 결과 파일이 없습니다.",
-      "lastErrorAt": "2026-09-02T16:30:18.499Z"
+      "lastErrorAt": "2026-09-02T19:28:08.644Z"
     }
   }
 }
